@@ -21,8 +21,8 @@ Viewer.ViewpointF: 2000
 
 # Camera calibration and distortion parameters (OpenCV) 
 
-Camera.width: 3072
-Camera.height: 1536
+Camera.width: 5760
+Camera.height: 2880
 
 # Camera frames per second 
 Camera.fps: 30.0
