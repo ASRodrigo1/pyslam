@@ -74,10 +74,10 @@ def bundle_adjustment(keyframes, points, local_window, fixed_points=False, verbo
     
     # add point vertices to graph 
     for p in points:
-        assert(p is not None)        
+        assert(p is not None)
         if p.is_bad:  # do not consider bad points   
             continue
-        if __debug__:        
+        if __debug__:
             if not any([f in keyframes for f in p.keyframes()]):  
                 Printer.red('point without a viewing frame!!')
                 continue        
@@ -106,7 +106,7 @@ def bundle_adjustment(keyframes, points, local_window, fixed_points=False, verbo
             if use_robust_kernel:
                 edge.set_robust_kernel(g2o.RobustKernelHuber(thHuberMono))
 
-            edge.fx = kf.camera.fx 
+            edge.fx = kf.camera.fx
             edge.fy = kf.camera.fy
             edge.cx = kf.camera.cx
             edge.cy = kf.camera.cy
@@ -196,6 +196,7 @@ def pose_optimization(frame, verbose=False, rounds=10):
             edge.cx = frame.camera.cx
             edge.cy = frame.camera.cy
             edge.Xw = p.pt[0:3]
+            #print("PT:", p.pt[0:3])
             
             opt.add_edge(edge)
 

@@ -17,6 +17,34 @@
 * along with PYSLAM. If not, see <http://www.gnu.org/licenses/>.
 """
 
+REMOVE = False # Set to true if you wanna remove objetcs in the scene
+
+OBJECTS = [
+    #'sky',
+    #'person',
+    #'car',
+    #'truck',
+    #'bus',
+    #'train',
+    #'bicycle',
+    #'motorcycle',
+    'vegetation',
+    'terrain',
+    'wall',
+    'sidewalk',
+    'building',
+    'fence',
+    'road',
+    'pole'
+]
+
+if REMOVE:
+    from mmsegmentation.mmseg.apis import inference_segmentor, init_segmentor
+    from remove import *
+    import mmcv
+    config_file = 'mmsegmentation/configs/ocrnet/ocrnet_hr18_512x1024_40k_cityscapes.py'
+    checkpoint_file = 'mmsegmentation/checkpoints/ocrnet/ocrnet_hr18_512x1024_40k_cityscapes_20200601_033320-401c5bdd.pth'
+
 import numpy as np
 import cv2
 import math
@@ -27,7 +55,7 @@ import platform
 from config import Config
 
 from slam import Slam, SlamState
-from camera  import PinholeCamera
+from camera  import PinholeCamera, EquirecCamera
 from ground_truth import groundtruth_factory
 from dataset import dataset_factory
 
@@ -61,10 +89,15 @@ if __name__ == "__main__":
     #groundtruth = groundtruth_factory(config.dataset_settings)
     groundtruth = None # not actually used by Slam() class; could be used for evaluating performances 
 
+    """
     cam = PinholeCamera(config.cam_settings['Camera.width'], config.cam_settings['Camera.height'],
                         config.cam_settings['Camera.fx'], config.cam_settings['Camera.fy'],
                         config.cam_settings['Camera.cx'], config.cam_settings['Camera.cy'],
                         config.DistCoef, config.cam_settings['Camera.fps'])
+    """
+
+    cam = EquirecCamera(config.cam_settings['Camera.width'], config.cam_settings['Camera.height'],
+                        config.cam_settings['Camera.fps'])
     
     num_features=2000 
 
@@ -73,7 +106,7 @@ if __name__ == "__main__":
 
     # select your tracker configuration (see the file feature_tracker_configs.py) 
     # FeatureTrackerConfigs: SHI_TOMASI_ORB, FAST_ORB, ORB, ORB2, ORB2_FREAK, ORB2_BEBLID, BRISK, AKAZE, FAST_FREAK, SIFT, ROOT_SIFT, SURF, SUPERPOINT, FAST_TFEAT, CONTEXTDESC
-    tracker_config = FeatureTrackerConfigs.TEST
+    tracker_config = FeatureTrackerConfigs.ORB
     tracker_config['num_features'] = num_features
     tracker_config['tracker_type'] = tracker_type
     
@@ -96,13 +129,26 @@ if __name__ == "__main__":
     do_step = False   
     is_paused = False 
     
-    img_id = 0  #180, 340, 400   # you can start from a desired frame id if needed 
+    img_id = 0  #180, 340, 400   # you can start from a desired frame id if needed
+
+    # In case we wanna remove objects from a frame
+    if REMOVE:
+        model = init_segmentor(config_file, checkpoint_file, device='cuda:0')
+        classes = {j: i for i, j in enumerate(model.CLASSES)}
+        objects_indexes = [classes[i] for i in OBJECTS]
+
     while dataset.isOk():
             
         if not is_paused: 
             print('..................................')
             print('image: ', img_id)                
             img = dataset.getImageColor(img_id)
+
+            # Remove objects from a frame
+            if REMOVE:
+                result = inference_segmentor(model, img)
+                img = remove_objects(img, result, objects_indexes)
+
             if img is None:
                 print('image is empty')
                 getchar()
@@ -111,8 +157,8 @@ if __name__ == "__main__":
             frame_duration = next_timestamp-timestamp 
 
             if img is not None:
-                time_start = time.time()                  
-                slam.track(img, img_id, timestamp)  # main SLAM function 
+                time_start = time.time()
+                slam.track(img, img_id, timestamp)  # main SLAM function
                                 
                 # 3D display (map display)
                 if viewer3D is not None:

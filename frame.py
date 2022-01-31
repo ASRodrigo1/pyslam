@@ -161,6 +161,7 @@ class FrameBase(object):
     def project_points(self, points):                   
         pcs = self.transform_points(points)      
         return self.camera.project(pcs)
+        
     # project a list of N MapPoint objects on this frame
     # out: Nx2 image points, [Nx1] array of map point depths 
     def project_map_points(self, map_points):    
@@ -275,10 +276,11 @@ class Frame(FrameBase):
             else: 
                 self.img = None                    
             if kps_data is None:   
-                self.kps, self.des = Frame.tracker.detectAndCompute(img)                                                         
+                self.kps, self.des = Frame.tracker.detectAndCompute(img)
+
                 # convert from a list of keypoints to arrays of points, octaves, sizes  
-                kps_data = np.array([ [x.pt[0], x.pt[1], x.octave, x.size, x.angle] for x in self.kps ], dtype=np.float32)                            
-                self.kps     = kps_data[:,:2]    
+                kps_data = np.array([ [x.pt[0], x.pt[1], x.octave, x.size, x.angle] for x in self.kps ], dtype=np.float32)
+                self.kps     = kps_data[:,:2]
                 self.octaves = np.uint32(kps_data[:,2]) #print('octaves: ', self.octaves)                      
                 self.sizes   = kps_data[:,3]
                 self.angles  = kps_data[:,4]       

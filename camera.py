@@ -35,9 +35,10 @@ class Camera:
         self.fps = fps 
         
         self.is_distorted = np.linalg.norm(self.D) > 1e-10
-        self.initialized = False     
+        self.initialized = False        
         
         
+
 class PinholeCamera(Camera):
     def __init__(self, width, height, fx, fy, cx, cy, D, fps = 1):
         super().__init__(width, height, fx, fy, cx, cy, D, fps)
@@ -58,13 +59,15 @@ class PinholeCamera(Camera):
             self.undistort_image_bounds()        
                 
     # project a 3D point or an array of 3D points (w.r.t. camera frame), of shape [Nx3]
-    # out: Nx2 image points, [Nx1] array of map point depths     
+    # out: Nx2 image points, [Nx1] array of map point depths
     def project(self, xcs):
         #u = self.fx * xc[0]/xc[2] + self.cx
-        #v = self.fy * xc[1]/xc[2] + self.cy  
-        projs = self.K @ xcs.T     
-        zs = projs[-1]      
-        projs = projs[:2]/ zs   
+        #v = self.fy * xc[1]/xc[2] + self.cy
+        #print("XCS:", xcs)
+        projs = self.K @ xcs.T
+        zs = projs[-1]   
+        projs = projs[:2] / zs
+        #print("AQUI2:", np.shape(projs.T), projs.T, np.shape(zs), zs)
         return projs.T, zs
         
     # unproject 2D point uv (pixels on image plane) on 
@@ -74,9 +77,9 @@ class PinholeCamera(Camera):
         return x,y
 
     # in:  uvs [Nx2]
-    # out: xcs array [Nx3] of normalized coordinates     
+    # out: xcs array [Nx3] of normalized coordinates
     def unproject_points(self, uvs):
-        return np.dot(self.Kinv, add_ones(uvs).T).T[:, 0:2]        
+        return np.dot(self.Kinv, add_ones(uvs).T).T[:, 0:2]
 
     # in:  uvs [Nx2]
     # out: uvs_undistorted array [Nx2] of undistorted coordinates  
@@ -118,6 +121,96 @@ class PinholeCamera(Camera):
                 
     # input: [Nx2] array of uvs, [Nx1] of zs 
     # output: [Nx1] array of visibility flags             
+    def are_in_image(self, uvs, zs):
+        return (uvs[:, 0] > self.u_min) & (uvs[:, 0] < self.u_max) & \
+               (uvs[:, 1] > self.v_min) & (uvs[:, 1] < self.v_max) & \
+               (zs > 0 )
+
+
+class EquirecCamera(Camera):
+    def __init__(self, width, height, fps = 1):
+        super().__init__(width, height, 0, 0, (width-1)/2, (height-1)/2, [0, 0, 0, 0, 0], fps)
+        
+        self.u_min, self.u_max = 0, width
+        self.v_min, self.v_max = 0, height
+
+        self.init()
+        
+    def init(self):
+        if not self.initialized:
+            self.initialized = True 
+            self.undistort_image_bounds()
+
+    def to_deg(rad):
+        """From radians to degrees"""
+        return rad*180/np.pi
+
+    def to_rad(deg):
+        """From degrees to radians"""
+        return deg*np.pi/180
+
+    # 3D to 2D
+    def project(self, xcs):
+        """(lat, lon) in a sphere to (x, y) in a image"""
+        x = xcs[:, 0]
+        y = xcs[:, 1]
+        z = xcs[:, 2]
+
+        r = np.sqrt(x**2 + y**2 + z**2)
+
+        theta = np.arctan2(y, x)
+        phi = np.arccos(z/r)
+
+        for i in range(len(theta)):
+            if theta[i] < 0:
+                theta[i] += (2 * np.pi)
+
+        u = self.width * theta / (2 * np.pi)
+        v = self.height * phi / np.pi
+
+        uvs = np.array([i for i in zip(u, v)])
+
+        return uvs, z
+
+    # 2D to 3D
+    def unproject_points(self, uvs): # OK
+        """(x, y) in a image to (x, y) in a 3D spherical world"""
+        u = uvs[:, 0] / self.width
+        v = uvs[:, 1] / self.height
+
+        theta = u * 2 * np.pi
+        phi = v * np.pi
+
+        x = np.cos(theta) * np.sin(phi)
+        y = np.sin(theta) * np.sin(phi)
+        
+        xcs = np.array([i for i in zip(x, y)])
+
+        return xcs
+
+    # in:  uvs [Nx2]
+    # out: uvs_undistorted array [Nx2] of undistorted coordinates  
+    def undistort_points(self, uvs): # OK
+        return uvs
+        
+    # update image bounds     
+    def undistort_image_bounds(self): # OK
+        uv_bounds = np.array([[self.u_min, self.v_min],
+                                [self.u_min, self.v_max],
+                                [self.u_max, self.v_min],
+                                [self.u_max, self.v_max]], dtype=np.float32).reshape(4,2)
+
+        uv_bounds_undistorted = uv_bounds
+        self.u_min = min(uv_bounds_undistorted[0][0],uv_bounds_undistorted[1][0])
+        self.u_max = max(uv_bounds_undistorted[2][0],uv_bounds_undistorted[3][0])
+        self.v_min = min(uv_bounds_undistorted[0][1],uv_bounds_undistorted[2][1])
+        self.v_max = max(uv_bounds_undistorted[1][1],uv_bounds_undistorted[3][1])
+     
+    def is_in_image(self, uv, z):
+        return (uv[0] > self.u_min) & (uv[0] < self.u_max) & \
+               (uv[1] > self.v_min) & (uv[1] < self.v_max) & \
+               (zs > 0 )
+                            
     def are_in_image(self, uvs, zs):
         return (uvs[:, 0] > self.u_min) & (uvs[:, 0] < self.u_max) & \
                (uvs[:, 1] > self.v_min) & (uvs[:, 1] < self.v_max) & \

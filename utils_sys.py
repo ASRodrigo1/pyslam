@@ -38,9 +38,9 @@ myjet = np.array([[0.        , 0.        , 0.5       ],
 
 
 def getchar():
-    print('press enter to continue:')
-    a = input('').split(" ")[0]
-    print(a)
+    #print('press enter to continue:')
+    #a = input('').split(" ")[0]
+    print()
     
 
 def str2bool(v):
@@ -250,10 +250,10 @@ def print_notification(content_list, notifi_type='NOTIFICATION'):
     print('----------------------------------------------------')    
     
 def get_opencv_version():
-    opencv_major =  int(cv2.__version__.split('.')[0])
-    opencv_minor =  int(cv2.__version__.split('.')[1])    
-    opencv_build = int(cv2.__version__.split('.')[2])    
-    return (opencv_major, opencv_minor, opencv_build)
+    #opencv_major =  int(cv2.__version__.split('.')[0])
+    #opencv_minor =  int(cv2.__version__.split('.')[1])    
+    #opencv_build = int(cv2.__version__.split('.')[2])    
+    return (4, 5, 4)
 
 def is_opencv_version_greater_equal(a, b, c):
     opencv_version = get_opencv_version()

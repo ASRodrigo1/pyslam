@@ -13,7 +13,8 @@ thirdparty/pangolin
 matches.txt 
 map.png
 .vscode 
-videos/webcam
+videos
+mmsegmentation
 
 kf_info.log 
 local_mapping.log 

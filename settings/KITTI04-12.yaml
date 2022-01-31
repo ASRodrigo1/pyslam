@@ -30,11 +30,14 @@ Camera.k2: 0.0
 Camera.p1: 0.0
 Camera.p2: 0.0
 
-Camera.width: 1226
-Camera.height: 370
+Camera.width: 3072
+Camera.height: 1536
+
+#Camera.width: 1226
+#Camera.height: 370
 
 # Camera frames per second 
-Camera.fps: 10.0
+Camera.fps: 30.0
 
 # stereo baseline times fx
 Camera.bf: 379.8145
