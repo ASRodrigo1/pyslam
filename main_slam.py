@@ -97,9 +97,11 @@ if __name__ == "__main__":
     """
 
     cam = EquirecCamera(config.cam_settings['Camera.width'], config.cam_settings['Camera.height'],
-                        config.cam_settings['Camera.fps'])
+                        config.cam_settings['Camera.fx'], config.cam_settings['Camera.fy'],
+                        config.cam_settings['Camera.cx'], config.cam_settings['Camera.cy'],
+                        config.DistCoef, config.cam_settings['Camera.fps'])
     
-    num_features=2000 
+    num_features=2000
 
     tracker_type = FeatureTrackerTypes.DES_BF      # descriptor-based, brute force matching with knn 
     #tracker_type = FeatureTrackerTypes.DES_FLANN  # descriptor-based, FLANN-based matching 

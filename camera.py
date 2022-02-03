@@ -42,15 +42,18 @@ class Camera:
 class PinholeCamera(Camera):
     def __init__(self, width, height, fx, fy, cx, cy, D, fps = 1):
         super().__init__(width, height, fx, fy, cx, cy, D, fps)
+
         self.K = np.array([[fx, 0,cx],
                            [ 0,fy,cy],
                            [ 0, 0, 1]])
+
         self.Kinv = np.array([[1/fx,    0,-cx/fx],
                               [   0, 1/fy,-cy/fy],
                               [   0,    0,    1]])             
         
-        self.u_min, self.u_max = 0, self.width 
-        self.v_min, self.v_max = 0, self.height       
+        self.u_min, self.u_max = 0, self.width
+        self.v_min, self.v_max = 0, self.height
+
         self.init()    
         
     def init(self):
@@ -128,11 +131,25 @@ class PinholeCamera(Camera):
 
 
 class EquirecCamera(Camera):
-    def __init__(self, width, height, fps = 1):
-        super().__init__(width, height, 0, 0, (width-1)/2, (height-1)/2, [0, 0, 0, 0, 0], fps)
+    def __init__(self, width, height, fx, fy, cx, cy, D, fps = 1):
+        super().__init__(width, height, fx, fy, cx, cy, D, fps)
         
         self.u_min, self.u_max = 0, width
         self.v_min, self.v_max = 0, height
+
+        self.K = np.array([[fx, 0,cx],
+                           [ 0,fy,cy],
+                           [ 0, 0, 1]])
+
+        self.Kinv = np.array([[1/fx,    0,-cx/fx],
+                              [   0, 1/fy,-cy/fy],
+                              [   0,    0,    1]])
+
+        self.xi = 1
+
+        self.Mc = np.array([-self.xi,    0   , 0,
+                                 0  , self.xi, 0,
+                                 0  ,    0   , 1])
 
         self.init()
         
@@ -152,6 +169,7 @@ class EquirecCamera(Camera):
     # 3D to 2D
     def project(self, xcs):
         """(lat, lon) in a sphere to (x, y) in a image"""
+        
         x = xcs[:, 0]
         y = xcs[:, 1]
         z = xcs[:, 2]
@@ -173,8 +191,7 @@ class EquirecCamera(Camera):
         return uvs, z
 
     # 2D to 3D
-    def unproject_points(self, uvs): # OK
-        """(x, y) in a image to (x, y) in a 3D spherical world"""
+    def unproject_points(self, uvs):
         u = uvs[:, 0] / self.width
         v = uvs[:, 1] / self.height
 
@@ -190,11 +207,11 @@ class EquirecCamera(Camera):
 
     # in:  uvs [Nx2]
     # out: uvs_undistorted array [Nx2] of undistorted coordinates  
-    def undistort_points(self, uvs): # OK
+    def undistort_points(self, uvs):
         return uvs
         
     # update image bounds     
-    def undistort_image_bounds(self): # OK
+    def undistort_image_bounds(self):
         uv_bounds = np.array([[self.u_min, self.v_min],
                                 [self.u_min, self.v_max],
                                 [self.u_max, self.v_min],

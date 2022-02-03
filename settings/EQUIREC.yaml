@@ -20,6 +20,15 @@ Viewer.ViewpointF: 2000
 #--------------------------------------------------------------------------------------------
 
 # Camera calibration and distortion parameters (OpenCV) 
+Camera.fx: 488.924
+Camera.fy: 488.924
+Camera.cx: 0.0
+Camera.cy: 0.0
+
+Camera.k1: 0.0
+Camera.k2: 0.0
+Camera.p1: 0.0
+Camera.p2: 0.0
 
 Camera.width: 3072
 Camera.height: 1536
