@@ -17,7 +17,11 @@
 * along with PYSLAM. If not, see <http://www.gnu.org/licenses/>.
 """
 
+SAVE_MAP = True # Set to true if you wanna save map points to a file
+
 REMOVE = False # Set to true if you wanna remove objetcs in the scene
+
+CLASSIFY = True # Set to true to add labels to each point
 
 OBJECTS = [
     #'sky',
@@ -38,7 +42,7 @@ OBJECTS = [
     'pole'
 ]
 
-if REMOVE:
+if REMOVE or CLASSIFY:
     from mmsegmentation.mmseg.apis import inference_segmentor, init_segmentor
     from remove import *
     import mmcv
@@ -89,26 +93,28 @@ if __name__ == "__main__":
     #groundtruth = groundtruth_factory(config.dataset_settings)
     groundtruth = None # not actually used by Slam() class; could be used for evaluating performances 
 
-    """
+    
     cam = PinholeCamera(config.cam_settings['Camera.width'], config.cam_settings['Camera.height'],
                         config.cam_settings['Camera.fx'], config.cam_settings['Camera.fy'],
                         config.cam_settings['Camera.cx'], config.cam_settings['Camera.cy'],
                         config.DistCoef, config.cam_settings['Camera.fps'])
-    """
+    
 
+    """
     cam = EquirecCamera(config.cam_settings['Camera.width'], config.cam_settings['Camera.height'],
                         config.cam_settings['Camera.fx'], config.cam_settings['Camera.fy'],
                         config.cam_settings['Camera.cx'], config.cam_settings['Camera.cy'],
                         config.DistCoef, config.cam_settings['Camera.fps'])
-    
-    num_features=2000
+    """
 
-    tracker_type = FeatureTrackerTypes.DES_BF      # descriptor-based, brute force matching with knn 
-    #tracker_type = FeatureTrackerTypes.DES_FLANN  # descriptor-based, FLANN-based matching 
+    num_features=5000
+
+    #tracker_type = FeatureTrackerTypes.DES_BF      # descriptor-based, brute force matching with knn 
+    tracker_type = FeatureTrackerTypes.DES_FLANN  # descriptor-based, FLANN-based matching 
 
     # select your tracker configuration (see the file feature_tracker_configs.py) 
     # FeatureTrackerConfigs: SHI_TOMASI_ORB, FAST_ORB, ORB, ORB2, ORB2_FREAK, ORB2_BEBLID, BRISK, AKAZE, FAST_FREAK, SIFT, ROOT_SIFT, SURF, SUPERPOINT, FAST_TFEAT, CONTEXTDESC
-    tracker_config = FeatureTrackerConfigs.ORB
+    tracker_config = FeatureTrackerConfigs.CONTEXTDESC
     tracker_config['num_features'] = num_features
     tracker_config['tracker_type'] = tracker_type
     
@@ -132,9 +138,10 @@ if __name__ == "__main__":
     is_paused = False 
     
     img_id = 0  #180, 340, 400   # you can start from a desired frame id if needed
+    stop_id = 300 # Frame to stop
 
     # In case we wanna remove objects from a frame
-    if REMOVE:
+    if REMOVE or CLASSIFY:
         model = init_segmentor(config_file, checkpoint_file, device='cuda:0')
         classes = {j: i for i, j in enumerate(model.CLASSES)}
         objects_indexes = [classes[i] for i in OBJECTS]
@@ -147,9 +154,13 @@ if __name__ == "__main__":
             img = dataset.getImageColor(img_id)
 
             # Remove objects from a frame
-            if REMOVE:
+            if REMOVE or CLASSIFY:
                 result = inference_segmentor(model, img)
-                img = remove_objects(img, result, objects_indexes)
+                if REMOVE:
+                    img = remove_objects(img, result, objects_indexes)
+            
+            if not CLASSIFY:
+                result = None
 
             if img is None:
                 print('image is empty')
@@ -160,7 +171,7 @@ if __name__ == "__main__":
 
             if img is not None:
                 time_start = time.time()
-                slam.track(img, img_id, timestamp)  # main SLAM function
+                slam.track(img, img_id, timestamp, segmentation=result[0])  # main SLAM function
                                 
                 # 3D display (map display)
                 if viewer3D is not None:
@@ -174,6 +185,7 @@ if __name__ == "__main__":
                 else: 
                     cv2.imshow('Camera', img_draw)
 
+                """
                 if matched_points_plt is not None: 
                     if slam.tracking.num_matched_kps is not None: 
                         matched_kps_signal = [img_id, slam.tracking.num_matched_kps]     
@@ -190,14 +202,17 @@ if __name__ == "__main__":
                     if slam.tracking.descriptor_distance_sigma is not None: 
                         descriptor_sigma_signal = [img_id, slam.tracking.descriptor_distance_sigma]                    
                         matched_points_plt.draw(descriptor_sigma_signal,'descriptor distance $\sigma_{th}$',color='k')                                                                 
-                    matched_points_plt.refresh()    
+                    matched_points_plt.refresh()
+                """   
                 
                 duration = time.time()-time_start 
                 if(frame_duration > duration):
                     print('sleeping for frame')
                     time.sleep(frame_duration-duration)        
                     
-            img_id += 1  
+            img_id += 1
+            if img_id == stop_id:
+                break
         else:
             time.sleep(1)                                 
         
@@ -235,7 +250,12 @@ if __name__ == "__main__":
         
         if viewer3D is not None:
             is_paused = not viewer3D.is_paused()         
-                        
+    
+    if SAVE_MAP:
+        points = np.array([[point.pt, np.array(point.color), point.label] for point in slam.map.points])
+        np.save('../tests/coords/points', points)
+        np.save('../tests/coords/classes', np.array(classes))
+    
     slam.quit()
     
     #cv2.waitKey(0)
