@@ -82,19 +82,19 @@ class Initializer(object):
     # N.B.3: the five-point algorithm (used for estimating the Essential Matrix) seems to work well in the degenerate planar cases [Five-Point Motion Estimation Made Easy, Hartley]
     # N.B.4: as reported above, in case of pure rotation, this algorithm will compute a useless fundamental matrix which cannot be decomposed to return the rotation     
     # N.B.5: the OpenCV findEssentialMat function uses the five-point algorithm solver by D. Nister => hence it should work well in the degenerate planar cases
-    def estimatePose(self, kpn_ref, kpn_cur):
-        # here, the essential matrix algorithm uses the five-point algorithm solver by D. Nister (see the notes and paper above
-        E, self.mask_match = cv2.findEssentialMat(kpn_cur, kpn_ref, focal=1, pp=(0., 0.), method=cv2.RANSAC, prob=kRansacProb, threshold=kRansacThresholdNormalized)
+    def estimatePose(self, kpn_ref, kpn_cur):        
+        # here, the essential matrix algorithm uses the five-point algorithm solver by D. Nister (see the notes and paper above )     
+        E, self.mask_match = cv2.findEssentialMat(kpn_cur, kpn_ref, focal=1, pp=(0., 0.), method=cv2.RANSAC, prob=kRansacProb, threshold=kRansacThresholdNormalized)                         
         _, R, t, mask = cv2.recoverPose(E, kpn_cur, kpn_ref, focal=1, pp=(0., 0.))                                                     
-        return poseRt(R,t.T)  # Trc  homogeneous transformation matrix with respect to 'ref' frame,  pr_= Trc * pc_
+        return poseRt(R,t.T)  # Trc  homogeneous transformation matrix with respect to 'ref' frame,  pr_= Trc * pc_        
 
     # push the first image
     def init(self, f_cur):
         self.frames.append(f_cur)    
-        self.f_ref = f_cur     
+        self.f_ref = f_cur           
 
     # actually initialize having two available images 
-    def initialize(self, f_cur, img_cur):
+    def initialize(self, f_cur, img_cur, segmentation=None):
 
         if self.num_failures > kNumOfFailuresAfterWichNumMinTriangulatedPointsIsHalved: 
             self.num_min_triangulated_points = 0.5 * Parameters.kInitializerNumMinTriangulatedPoints
@@ -129,16 +129,16 @@ class Initializer(object):
             return out, is_ok
 
         # find keypoint matches
-        idxs_cur, idxs_ref = match_frames(f_cur, f_ref, kFeatureMatchRatioTestInitializer)
+        idxs_cur, idxs_ref = match_frames(f_cur, f_ref, kFeatureMatchRatioTestInitializer)       
     
         print('|------------')        
         #print('deque ids: ', [f.id for f in self.frames])
         print('initializing frames ', f_cur.id, ', ', f_ref.id)
-        print("# keypoint matches: ", len(idxs_cur))
+        print("# keypoint matches: ", len(idxs_cur))  
                 
         Trc = self.estimatePose(f_ref.kpsn[idxs_ref], f_cur.kpsn[idxs_cur])
         Tcr = inv_T(Trc)  # Tcr w.r.t. ref frame 
-        f_ref.update_pose(np.eye(4))
+        f_ref.update_pose(np.eye(4))        
         f_cur.update_pose(Tcr)
 
         # remove outliers from keypoint matches by using the mask computed with inter frame pose estimation        
@@ -157,13 +157,13 @@ class Initializer(object):
         #map.add_frame(f_cur)  
         
         kf_ref = KeyFrame(f_ref)
-        kf_cur = KeyFrame(f_cur, img_cur)        
+        kf_cur = KeyFrame(f_cur, img_cur, segmentation=segmentation)        
         map.add_keyframe(kf_ref)        
         map.add_keyframe(kf_cur)      
         
         pts3d, mask_pts3d = triangulate_normalized_points(kf_cur.Tcw, kf_ref.Tcw, kf_cur.kpsn[idx_cur_inliers], kf_ref.kpsn[idx_ref_inliers])
 
-        new_pts_count, mask_points, _ = map.add_points(pts3d, mask_pts3d, kf_cur, kf_ref, idx_cur_inliers, idx_ref_inliers, img_cur, do_check=True, cos_max_parallax=Parameters.kCosMaxParallaxInitializer)
+        new_pts_count, mask_points, _ = map.add_points(pts3d, mask_pts3d, kf_cur, kf_ref, idx_cur_inliers, idx_ref_inliers, img_cur, do_check=True, cos_max_parallax=Parameters.kCosMaxParallaxInitializer, segmentation=segmentation)
         print("# triangulated points: ", new_pts_count)   
                         
         if new_pts_count > self.num_min_triangulated_points:  
