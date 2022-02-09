@@ -17,6 +17,8 @@
 * along with PYSLAM. If not, see <http://www.gnu.org/licenses/>.
 """
 
+import inspect
+
 import time
 import numpy as np
 import json
@@ -58,6 +60,8 @@ class Map(object):
         self.frames = deque(maxlen=kMaxLenFrameDeque)  # deque with max length, it is thread-safe 
         self.keyframes = OrderedSet()  
         self.points = set()
+
+        self.labels = {}
         
         self.max_frame_id = 0     # 0 is the first frame id
         self.max_point_id = 0     # 0 is the first point id
@@ -127,6 +131,9 @@ class Map(object):
             self.max_point_id += 1
             #self.points.append(point)
             self.points.add(point)
+
+            self.labels[str(id(point))] = point.label
+
             return ret
 
 
@@ -134,6 +141,7 @@ class Map(object):
         with self._lock:    
             try:                    
                 self.points.remove(point)
+                _ = self.labels.pop(str(id(point)))
             except:
                 pass 
             point.delete()        
@@ -188,7 +196,7 @@ class Map(object):
 
     # add new points to the map from 3D point estimations, frames and pairwise matches
     # points3d is [Nx3]
-    def add_points(self, points3d, mask_pts3d, kf1, kf2, idxs1, idxs2, img1, do_check=True, cos_max_parallax=Parameters.kCosMaxParallax):
+    def add_points(self, points3d, mask_pts3d, kf1, kf2, idxs1, idxs2, img1, do_check=True, cos_max_parallax=Parameters.kCosMaxParallax, segmentation=None):
         with self._lock:             
             assert(kf1.is_keyframe and  kf2.is_keyframe) # kf1 and kf2 must be keyframes 
             assert(points3d.shape[0] == len(idxs1))
@@ -203,7 +211,7 @@ class Map(object):
             
             if do_check:            
                 # project points
-                uvs1, depths1 = kf1.project_points(points3d)    
+                uvs1, depths1 = kf1.project_points(points3d)
                 bad_depths1 =  depths1 <= 0  
                 uvs2, depths2 = kf2.project_points(points3d)    
                 bad_depths2 =  depths2 <= 0                   
@@ -254,11 +262,11 @@ class Map(object):
             img_pts_end   = img_coords + delta
             img_ranges = np.linspace(img_pts_start,img_pts_end,patch_extension,dtype=np.intp)[:,:].T      
             def img_range_elem(ranges,i):      
-                return ranges[:,i]                                                  
+                return ranges[:,i]
             
+            uvs1 = kf1.project_points(points3d)[0]
             for i, p in enumerate(points3d):
                 if not mask_pts3d[i]:
-                    #print('p[%d] not good' % i)
                     continue
                     
                 idx1_i = idxs1[i]
@@ -267,84 +275,32 @@ class Map(object):
                 # perform different required checks before adding the point 
                 if do_check:
                     if bad_points[i]:
-                        continue 
-                                        
-                    # check parallax is large enough (this is going to filter out all points when the inter-frame motion is almost zero)           
-                    # ray1 = np.dot(kf1.Rwc, add_ones_1D(kf1.kpsn[idx1_i]))
-                    # ray2 = np.dot(kf2.Rwc, add_ones_1D(kf2.kpsn[idx2_i]))
-                    # cos_parallax = ray1.dot(ray2) / (np.linalg.norm(ray1) * np.linalg.norm(ray2))
-                    # if cos_parallax < 0 or cos_parallax > cos_max_parallax:
-                    #     #print('p[',i,']: ',p,' not enough parallax: ', cos_parallaxs[i]) 
-                    #     continue
+                        continue
 
-                    # check points are visible on f1
-                    # uv1, depth1 = kf1.project_point(p)
-                    # is_visible1  = kf1.is_in_image(uv1, depth1) # N.B.: is_in_image() check is redundant since we check the reproj errror 
-                    # if not is_visible1:
-                    #     continue   
-                    
-                    # check points are visible on f2                       
-                    # uv2, depth2 = kf2.project_point(p) 
-                    # is_visible2  = kf2.is_in_image(uv2, depth2)  # N.B.: is_in_image() check is redundant since we check the reproj errror 
-                    # if not is_visible2:
-                    #     continue                                      
-                        
-                    # check reprojection error on f1
-                    #kp1_level = kf1.octaves[idx1_i]
-                    #invSigma2_1 = Frame.feature_manager.inv_level_sigmas2[kp1_level]                
-                    # err1 = uvs1[i] - kf1.kpsu[idx1_i]       
-                    # chi2_1 = np.inner(err1,err1)*invSigma2_1 
-                    # if chi2_1 > Parameters.kChi2Mono: # chi-square 2 DOFs  (Hartley Zisserman pg 119)
-                    #     continue                                 
-                    
-                    # check reprojection error on f2     
-                    # kp2_level = kf2.octaves[idx2_i]                          
-                    # invSigma2_2 = Frame.feature_manager.inv_level_sigmas2[kp2_level]                 
-                    # err2 = uvs2[i] - kf2.kpsu[idx2_i]         
-                    # chi2_2 = np.inner(err2,err2)*invSigma2_2                             
-                    # if chi2_2 > Parameters.kChi2Mono: # chi-square 2 DOFs  (Hartley Zisserman pg 119)
-                    #     continue               
-                    
-                    #check scale consistency 
-                    # scale_factor_x_depth1 =  Frame.feature_manager.scale_factors[kps1_levels[i]] * depths1[i]
-                    # scale_factor_x_depth2 =  Frame.feature_manager.scale_factors[kps2_levels[i]] * depths2[i]
-                    # if (scale_factor_x_depth1 > scale_factor_x_depth2*ratio_scale_consistency) or \
-                    #    (scale_factor_x_depth2 > scale_factor_x_depth1*ratio_scale_consistency):
-                    #     continue                                    
-
-                # get the color of the point  
                 try:
-                    #color = img1[int(round(kf1.kps[idx1_i, 1])), int(round(kf1.kps[idx1_i, 0]))]
-                    #img_pt = np.rint(kf1.kps[idx1_i]).astype(np.int)
-                    # color at the point 
-                    #color = img1[img_pt[1],img_pt[0]]                    
-                    # buils color patch 
-                    #color_patch = img1[img_pt[1]-delta:img_pt[1]+delta,img_pt[0]-delta:img_pt[0]+delta]
-                    #color = color_patch.mean(axis=0).mean(axis=0)  # compute the mean color in the patch     
-                                                                                           
-                    # average color in a (1+2*delta) x (1+2*delta) patch  
-                    #pt_start = img_pts_start[i]
-                    #pt_end   = img_pts_end[i]        
-                    #color_patch = img1[pt_start[1]:pt_end[1],pt_start[0]:pt_end[0]] 
-                    
-                    # average color in a (1+2*delta) x (1+2*delta) patch 
                     img_range = img_range_elem(img_ranges,i) 
-                    color_patch = img1[img_range[1][:,np.newaxis],img_range[0]]         
-                    #print('color_patch.shape:',color_patch.shape)    
+                    color_patch = img1[img_range[1][:,np.newaxis],img_range[0]]   
                                                                                   
                     color = cv2.mean(color_patch)[:3]  # compute the mean color in the patch                                                                                      
                 except IndexError:
                     Printer.orange('color out of range')
                     color = (255, 0, 0)
                     
-                # add the point to this map                 
-                mp = MapPoint(p[0:3], color, kf2, idx2_i) 
+                # add the point to this map
+                if segmentation is not None:
+                    uv = uvs1[i]
+                    label = segmentation[int(uv[1]), int(uv[0])]
+                else:
+                    label = None
+
+                mp = MapPoint(p[0:3], color, kf2, idx2_i, label=label)
                 self.add_point(mp) # add point to this map 
                 mp.add_observation(kf1, idx1_i)                    
                 mp.add_observation(kf2, idx2_i)                   
                 mp.update_info()
-                out_mask_pts3d[i] = True 
+                out_mask_pts3d[i] = True
                 added_points.append(mp)
+
             return len(added_points), out_mask_pts3d, added_points
 
 
@@ -585,5 +541,4 @@ class LocalCovisibilityMap(LocalMapBase):
     # update the local keyframes, the viewed points and the reference keyframes (that see the viewed points but are not in the local keyframes)
     def update(self, kf_ref):
         self.update_keyframes(kf_ref)
-        return self.update_from_keyframes(self.keyframes)         
-  
+        return self.update_from_keyframes(self.keyframes)    
