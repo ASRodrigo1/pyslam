@@ -234,11 +234,12 @@ class MapPointBase(object):
 # Each Point is observed in multiple Frames
 class MapPoint(MapPointBase):
     global_lock = RLock()      # shared global lock for blocking point position update     
-    def __init__(self, position, color, keyframe=None, idxf=None, id=None):
+    def __init__(self, position, color, keyframe=None, idxf=None, id=None, label=None):
         super().__init__(id)
         self._pt = np.array(position)
 
         self.color = color
+        self.label = label
             
         self.des = None  # best descriptor (continuously updated)
         self._min_distance, self._max_distance = 0, float('inf')  # depth infos 
@@ -374,7 +375,7 @@ class MapPoint(MapPointBase):
             if p.add_observation(kf,kidx): 
                 # point p was NOT in kf => added new observation in p
                 kf.replace_point_match(p,kidx)                  
-            else:                
+            else:
                 # point p is already in kf => just remove this point match from kf 
                 # (do NOT remove the observation otherwise self._num_observations is decreased in the replacement)
                 kf.remove_point_match(kidx)
