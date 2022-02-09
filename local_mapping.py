@@ -19,6 +19,8 @@
 
 from __future__ import print_function # This must be the first statement before other statements 
 
+import inspect
+
 import sys
 import time
 import numpy as np
@@ -165,18 +167,16 @@ class LocalMapping(object):
         Printer.cyan('@local mapping')
         time_start = time.time()
                 
-        self.kf_cur = self.queue.get()   
+        self.kf_cur = self.queue.get()
                 
         if kLocalMappingOnSeparateThread: 
             print('..................................')
             print('processing KF: ', self.kf_cur.id, ', queue size: ', self.queue_size())   
-        
-        #print('descriptor_distance_sigma: ', self.descriptor_distance_sigma)
                         
-        self.process_new_keyframe()          
+        self.process_new_keyframe()
                 
-        # do map points culling 
-        self.timer_pts_culling.start()        
+        # do map points culling
+        self.timer_pts_culling.start()
         num_culled_points = self.cull_map_points()
         self.timer_pts_culling.refresh()    
         print(' # culled points: ', num_culled_points)                 
@@ -341,6 +341,29 @@ class LocalMapping(object):
             
     # triangulate matched keypoints (without a corresponding map point) amongst recent keyframes      
     def create_new_map_points(self):
+
+        """
+        print("CALLER:")
+        stack = inspect.stack()
+        skip = 2
+        start = 0 + skip
+        parentframe = stack[start][0]
+        module_info = inspect.getmodule(parentframe)
+        if module_info:
+            mod = module_info.__name__.split('.')
+            package = mod[0]
+            #module = mod[1]
+        klass = None
+        if 'self' in parentframe.f_locals:
+            klass = parentframe.f_locals['self'].__class__.__name__
+        caller = None
+        if parentframe.f_code.co_name != '<module>':
+            caller = parentframe.f_code.co_name
+        line = parentframe.f_lineno
+        del parentframe
+        print(package, klass, caller, line)
+        """
+
         print('>>>> creating new map points')
         total_new_pts = 0
         
@@ -351,7 +374,8 @@ class LocalMapping(object):
         # precompute keypoint matches 
         match_idxs = self.precompute_kps_matches(match_idxs, local_keyframes)
                     
-        for i,kf in enumerate(local_keyframes):
+        for i, kf in enumerate(local_keyframes):
+            
             if kf is self.kf_cur or kf.is_bad:
                 continue 
             if i>0 and not self.queue.empty():
@@ -370,8 +394,8 @@ class LocalMapping(object):
             if len(idxs_cur) > 0:
                 # try to triangulate the matched keypoints that do not have a corresponding map point   
                 pts3d, mask_pts3d = triangulate_normalized_points(self.kf_cur.pose, kf.pose, self.kf_cur.kpsn[idxs_cur], kf.kpsn[idxs])
-                    
-                new_pts_count,_,list_added_points = self.map.add_points(pts3d, mask_pts3d, self.kf_cur, kf, idxs_cur, idxs, self.kf_cur.img, do_check=True)
+                #print("KF_SEG:", kf.segmentation)
+                new_pts_count,_,list_added_points = self.map.add_points(pts3d, mask_pts3d, self.kf_cur, kf, idxs_cur, idxs, self.kf_cur.img, do_check=True, segmentation=kf.segmentation)
                 print("# added map points: %d for KFs (%d, %d)" % (new_pts_count, self.kf_cur.id, kf.id))        
                 total_new_pts += new_pts_count 
                 self.recently_added_points.update(list_added_points)       
