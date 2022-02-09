@@ -144,9 +144,9 @@ class KeyFrameGraph(object):
                     
 
 class KeyFrame(Frame,KeyFrameGraph):
-    def __init__(self, frame, img=None):
+    def __init__(self, frame, img=None, segmentation=None):
         KeyFrameGraph.__init__(self)
-        Frame.__init__(self, img=None, camera=frame.camera, pose=frame.pose, id=frame.id, timestamp=frame.timestamp)   # here we MUST have img=None in order to avoid recomputing keypoint info
+        Frame.__init__(self, img=None, camera=frame.camera, pose=frame.pose, id=frame.id, timestamp=frame.timestamp, segmentation=segmentation)   # here we MUST have img=None in order to avoid recomputing keypoint info
                 
         if frame.img is not None: 
             self.img = frame.img  # this is already a copy of an image 
