@@ -105,7 +105,7 @@ class TrackingHistory(object):
 class Slam(object):
     def __init__(self, camera, feature_tracker, groundtruth = None):    
         self.init_feature_tracker(feature_tracker)
-        self.camera = camera 
+        self.camera = camera
         self.map = Map()
         self.local_mapping = LocalMapping(self.map)
         if kLocalMappingOnSeparateThread:
@@ -129,8 +129,8 @@ class Slam(object):
         
         
     # @ main track method @
-    def track(self, img, frame_id, timestamp=None):
-        return self.tracking.track(img, frame_id, timestamp)
+    def track(self, img, frame_id, timestamp=None, segmentation=None):
+        return self.tracking.track(img,frame_id,timestamp, segmentation=segmentation)
 
 
 class Tracking(object):
@@ -155,7 +155,7 @@ class Tracking(object):
         self.reproj_err_frame_map_sigma = Parameters.kMaxReprojectionDistanceMap        
         
         self.max_frames_between_kfs = int(system.camera.fps) 
-        self.min_frames_between_kfs = 0
+        self.min_frames_between_kfs = 0         
 
         self.state = SlamState.NO_IMAGES_YET
         
@@ -164,27 +164,27 @@ class Tracking(object):
         self.num_matched_map_points = None         # current number of matched map points (matched and found valid in current pose optimization)     
         self.num_kf_ref_tracked_points = None # number of tracked points in k_ref (considering a minimum number of observations)      
         
-        self.mask_match = None
+        self.mask_match = None 
 
-        self.pose_is_ok = False
-        self.predicted_pose = None
-        self.velocity = None
+        self.pose_is_ok = False 
+        self.predicted_pose = None 
+        self.velocity = None 
         
-        self.f_cur = None
-        self.idxs_cur = None
-        self.f_ref = None
-        self.idxs_ref = None
+        self.f_cur = None 
+        self.idxs_cur = None 
+        self.f_ref = None 
+        self.idxs_ref = None 
                 
         self.kf_ref = None    # reference keyframe (in general, different from last keyframe depending on the used approach)
         self.kf_last = None   # last keyframe  
         self.kid_last_BA = -1 # last keyframe id when performed BA 
         
-        self.local_keyframes = [] # local keyframes
-        self.local_points    = [] # local points
+        self.local_keyframes = [] # local keyframes 
+        self.local_points    = [] # local points 
          
         self.tracking_history = TrackingHistory()
  
-        self.timer_verbose = kTimerVerbose  # set this to True if you want to print timings
+        self.timer_verbose = kTimerVerbose  # set this to True if you want to print timings 
         self.timer_main_track = TimerFps('Track', is_verbose = self.timer_verbose)
         self.timer_pose_opt = TimerFps('Pose optimization', is_verbose = self.timer_verbose)
         self.timer_seach_frame_proj = TimerFps('Search frame by proj', is_verbose = self.timer_verbose) 
@@ -193,7 +193,7 @@ class Tracking(object):
         self.timer_frame = TimerFps('Frame', is_verbose = self.timer_verbose)
         self.timer_seach_map = TimerFps('Search map', is_verbose = self.timer_verbose)     
         
-        self.init_history = True
+        self.init_history = True 
         self.poses = []       # history of poses
         self.t0_est = None    # history of estimated translations      
         self.t0_gt = None     # history of ground truth translations (if available)
@@ -222,7 +222,7 @@ class Tracking(object):
         #Mcr = np.linalg.inv(poseRt(Mrc[:3, :3], Mrc[:3, 3]))   
         Mcr = inv_T(Mrc)
         estimated_Tcw = np.dot(Mcr, f_ref.pose)
-        self.timer_pose_est.refresh()
+        self.timer_pose_est.refresh()      
 
         # remove outliers from keypoint matches by using the mask computed with inter frame pose estimation        
         mask_idxs = (self.mask_match.ravel() == 1)
@@ -234,7 +234,7 @@ class Tracking(object):
         # if there are not enough inliers do not use the estimated pose 
         if self.num_inliers < kNumMinInliersEssentialMat:
             #f_cur.update_pose(f_ref.pose) # reset estimated pose to previous frame 
-            Printer.red('Essential mat: not enough inliers!')
+            Printer.red('Essential mat: not enough inliers!')  
         else:
             # use the estimated pose as an initial guess for the subsequent pose optimization 
             # set only the estimated rotation (essential mat computation does not provide a scale for the translation, see above) 
@@ -271,14 +271,14 @@ class Tracking(object):
         if use_search_frame_by_projection: 
             # search frame by projection: match map points observed in f_ref with keypoints of f_cur
             print('search frame by projection') 
-            search_radius = Parameters.kMaxReprojectionDistanceFrame
-            f_cur.reset_points()
+            search_radius = Parameters.kMaxReprojectionDistanceFrame          
+            f_cur.reset_points()               
             self.timer_seach_frame_proj.start()
             idxs_ref, idxs_cur, num_found_map_pts = search_frame_by_projection(f_ref, f_cur,
                                                                              max_reproj_distance=search_radius,
                                                                              max_descriptor_distance=self.descriptor_distance_sigma)
-            self.timer_seach_frame_proj.refresh()
-            self.num_matched_kps = len(idxs_cur)
+            self.timer_seach_frame_proj.refresh()  
+            self.num_matched_kps = len(idxs_cur)    
             print("# matched map points in prev frame: %d " % self.num_matched_kps)
                                     
             # if not enough map point matches consider a larger search radius 
@@ -493,7 +493,7 @@ class Tracking(object):
 
 
     # @ main track method @
-    def track(self, img, frame_id, timestamp=None):
+    def track(self, img, frame_id, timestamp=None, segmentation=None):
         Printer.cyan('@tracking')
         time_start = time.time()
                 
@@ -507,9 +507,8 @@ class Tracking(object):
         self.timer_main_track.start()
 
         # build current frame 
-        self.timer_frame.start()
-        # Nessa etapa é criado o frame e detectado keypoints no mesmo        
-        f_cur = Frame(img, self.camera, timestamp=timestamp) 
+        self.timer_frame.start()        
+        f_cur = Frame(img, self.camera, timestamp=timestamp, segmentation=segmentation) 
         self.f_cur = f_cur 
         print("frame: ", f_cur.id)        
         self.timer_frame.refresh()   
@@ -526,8 +525,7 @@ class Tracking(object):
         
         if self.state == SlamState.NOT_INITIALIZED:
             # try to inizialize 
-            initializer_output, intializer_is_ok = self.intializer.initialize(f_cur, img)
-
+            initializer_output, intializer_is_ok = self.intializer.initialize(f_cur, img, segmentation)
             if intializer_is_ok:
                 kf_ref = initializer_output.kf_ref
                 kf_cur = initializer_output.kf_cur        
@@ -540,7 +538,7 @@ class Tracking(object):
                 kf_ref.init_observations()
                 kf_cur.init_observations()
                 # add points in map 
-                new_pts_count,_,_ = self.map.add_points(initializer_output.pts, None, kf_cur, kf_ref, initializer_output.idxs_cur, initializer_output.idxs_ref, img, do_check=False)
+                new_pts_count,_,_ = self.map.add_points(initializer_output.pts, None, kf_cur, kf_ref, initializer_output.idxs_cur, initializer_output.idxs_ref, img, do_check=False, segmentation=segmentation)
                 Printer.green("map: initialized %d new points" % (new_pts_count))                 
                 # update covisibility graph connections 
                 kf_ref.update_connections()
@@ -646,10 +644,10 @@ class Tracking(object):
                     Printer.green('adding new KF with frame id % d: ' %(f_cur.id))
                     if kLogKFinfoToFile:
                         self.kf_info_logger.info('adding new KF with frame id % d: ' %(f_cur.id))                
-                    kf_new = KeyFrame(f_cur, img)                                     
-                    self.kf_last = kf_new  
-                    self.kf_ref = kf_new 
-                    f_cur.kf_ref = kf_new                  
+                    kf_new = KeyFrame(f_cur, img, segmentation=segmentation)                                     
+                    self.kf_last = kf_new
+                    self.kf_ref = kf_new
+                    f_cur.kf_ref = kf_new
                     
                     self.local_mapping.push_keyframe(kf_new) 
                     if not kLocalMappingOnSeparateThread:
@@ -723,4 +721,3 @@ class Tracking(object):
     #         self.trueY = 0 
     #         self.trueZ = 0
     #         return 1
-
